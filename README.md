@@ -3,7 +3,7 @@ ipython-hydra
 
 Set of scripts to automatically launch iptyhon notebooks for each user who hits the page.
 
-To set up ipython.stanford.edu, we did a standard linux-apache web server install and installed the latest ipython (with easy install). We also also installed some other python packages that we wanted, like the nipy suite.
+To set up ipython.stanford.edu, we did a standard linux-apache web server install and installed the latest ipython (with easy install). We also installed some other python packages that we wanted, like the nipy suite.
 
 Additional configuration:
 
@@ -16,7 +16,11 @@ Additional configuration:
     chmod g+w /var/log/ipython
 
 The php scipt calls the two bash scripts, where all the hard work happens:
- * addldapuser will add a new user to the system, if they don't already exist. It must be run as root. The new user will have their password disabled, so by default they can't log in. They will also be added to the ipython group. If the user exists in Stanford LDAP, then their UID will be assigned by the LDAP result. Otherwise, a local UID is used. 
- * ipynb-launch will configure a new user's home directory (if it hasn't already been done) by setting up the ipython config file and checking out the tutorial notebooks from github. If the notebooks already exist, git pull is run to get any new items. However, we ensure that any existing notebooks are kept as the user last left them to ensure that we don't corrupt any of their edits. (NOTE: this part of the code suck particularly badly! Please tell me how to do this elegantly with git!)
+ * addldapuser will add a new user to the system, if they don't already exist. It must be run as root. The password is disabled because we use Stanford's kerberos authentication, so if users log in via ssh they can authenticate with their SUNet ID and password. The new user is also added to the ipython group. If the user exists in Stanford LDAP, then their UID will be assigned by the LDAP result. Otherwise, a local UID is used. 
+ 
+ * ipynb-launch will configure a new user's home directory (if it hasn't already been done) by setting up the ipython config file and checking out the tutorial notebooks from github. If the notebooks already exist, git pull is run to get any new items. However, we ensure that any existing notebooks are kept as the user last left them to ensure that we don't corrupt any of their edits. (NOTE: this part of the code suck particularly badly! Please tell me how to do this elegantly with git!) Finally, a new ipython notebook is launched, if needed. The port that it listens on and the auto-generated password are stored in files within the user's home directory (in ~/.ipython/lock and ~/.ipython/pass). If a server is already running for that user, and it seems to be listening on the correct port, then no action is taken.
+
+After these scripts are called, the port and password are read from the user's home directory and a little intermediate page is returned to the client. This page just contains a little javascript to do a POST to the ipython notebook server login page with the auto-generated password. If all works as planned, the user will never see this hidden page nor the ipython login page. They should be taken directly to their active notebook server. Unfortunately, sometimes we've noticed that the auto-login fails, and the user is confronted with the ipython log in page requesting a password that they don't know. Reloading the ipython.stanford.edu page to let it redo the auto-login usually fixes it. (The user will also see the ipython login page if they click the logout button in the notebook. Is there any way to hack around this?)
+
 
 
