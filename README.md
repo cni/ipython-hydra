@@ -9,7 +9,6 @@ Additional configuration:
 
     sudo su
     addgroup --system ipython
-    adduser bobd ipython
     echo “www-data ALL=(%ipython) NOPASSWD: /usr/local/bin/ipynb-launch” >> /etc/sudoers.d/ipython
     echo “www-data ALL=(root) NOPASSWD: /usr/local/bin/addldapuser” >> /etc/sudoers.d/ipython
     mkdir /var/log/ipython

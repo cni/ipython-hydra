@@ -12,7 +12,11 @@ if [ ! $1 ]; then
 fi
 
 if id $1 &> /dev/null ; then
-    echo "User $1 already exists. Exiting."
+    if [ -z "`groups $1 | grep ipython`" ]; then
+        /usr/sbin/adduser $1 ipython
+    else
+    	echo "User $1 already exists and is a member of the ipython group."
+    fi
     exit 1
 else
     ldapinfo=$(ldapsearch -x -h ldap.stanford.edu uid=$1)
