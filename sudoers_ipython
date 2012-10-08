@@ -1,0 +1,2 @@
+www-data ALL=(%ipython) NOPASSWD: /usr/local/bin/ipynb-launch
+www-data ALL=(root) NOPASSWD: /usr/local/bin/addldapuser

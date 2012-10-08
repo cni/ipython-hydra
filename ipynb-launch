@@ -1,0 +1,126 @@
+#!/bin/bash
+
+# Configre a user's home directory (if necessary) and launch an ipythonl notebook server 
+# for them (also only if necessary). This script *MUST* be run as the target user!
+# It's safe to run this script as often as you like. 
+
+# Copyright 2012 by Bob Dougherty (bobd@stanford.edu)
+
+# When we're run with sudo -u [someuser], the $USER and $HOME env vars reflect the caller,
+# not [someuser]. But whoami always returns the correct thing.
+user=`whoami`
+global_logfile=$1
+if [ -z "$global_logfile" ]; then
+    global_logfile='/tmp/${user}_ipython_server.log'
+fi
+echo "ipynb_launch for user $user..." >$global_logfile
+
+# Hard-link ipython to apache_ipython so that we can easily detect process that
+# that launch, and safely "killall" when needed.
+IPEXEC="apache_ipython"
+IPEXEC_PATH="/usr/local/bin/${IPEXEC}"
+IP="/home/${user}/.ipython"
+LOG="${IP}/log"
+CONF="${IP}/profile_nbserver/ipython_notebook_config.py"
+NBDIR="/home/${user}/ipython_notebooks"
+# TODO: hard-code the paths in the conf file, since we have them here anyway.
+
+if [ ! -f ${IP}/security/ssl_${user}.pem ]; then
+    mkdir -p -m 700 ${IP}/security
+    openssl req -new -newkey rsa:2048 -days 3652 -nodes -x509 -subj "/C=US/ST=CA/L=Stanford/O=Stanford University/CN=ipython.stanford.edu" -keyout ${IP}/security/ssl_${user}.pem -out ${IP}/security/ssl_${user}.pem
+fi
+if [ ! -e "$CONF" ]; then
+    echo "    Configuring home directory for user $user..." >>$global_logfile
+    mkdir -p ${IP}/profile_nbserver
+    echo "c = get_config()" > ${CONF}
+    echo "c.NotebookApp.ip = 'ipython.stanford.edu'" >> ${CONF}
+    # Ensure the port is within the range of ports that we have opened up in the firewall (9000-9999).
+    # From the ipython code docs, the port is selected with the following algorithm:
+    #     The first 5 ports will be sequential, and the remaining n-5 will be randomly 
+    #     selected in the range [port-2*n, port+2*n]. (n=port_retires)
+    # WTF were they smoking?!?! Anyway, it's fine. We can deal with it.
+    echo "c.NotebookApp.port = 9500" >> ${CONF}
+    echo "c.NotebookApp.port_retries = 249" >> ${CONF}
+    echo "c.NotebookApp.enable_mathjax = True" >> ${CONF}
+    echo "c.NotebookApp.open_browser = False" >> ${CONF}
+    echo "c.NotebookApp.certfile = u'${IP}/security/ssl_${user}.pem'" >> ${CONF}
+    echo "c.NotebookApp.ipython_dir = u'${IP}'" >> ${CONF}
+    echo "from IPython.lib import passwd" >> ${CONF}
+    echo "with open('${IP}/pass','r') as fp:" >> ${CONF}
+    echo "    p = fp.read().strip()" >> ${CONF}
+    echo "c.NotebookApp.password = unicode(passwd(p))" >> ${CONF}
+    echo "c.IPKernelApp.pylab = 'inline'" >> ${CONF}
+    echo "c.NotebookManager.notebook_dir = u'${NBDIR}'" >> ${CONF}
+fi
+if [ ! -e "$NBDIR" ]; then
+    echo "    Creating notebook directory for user $user..." >>$global_logfile
+    mkdir -p ${NBDIR} 2>>$global_logfile
+    echo "    Cloning psych204a notebooks for user $user..." >>$global_logfile
+    git clone https://github.com/mwaskom/Psych204A.git ${NBDIR} 2>>$global_logfile
+else
+    echo "    Fetching psych204a notebooks for user $user..." >>$global_logfile
+    mkdir ${NBDIR}_CACHE 2>>$global_logfile
+    mv -f ${NBDIR}/* ${NBDIR}_CACHE/ 2>>$global_logfile
+    cd ${NBDIR} 2>>$global_logfile
+    git pull 2>>$global_logfile
+    git checkout -f 2>>$global_logfile
+    cd 2>>$global_logfile
+    mv -f ${NBDIR}_CACHE/* ${NBDIR}/ 2>>$global_logfile
+    rmdir ${NBDIR}_CACHE 2>>$global_logfile
+    #git --git-dir=${NBDIR}/.git fetch
+fi
+#if [ ! -e "$NBDIR/principles_statistics.ipynb" ]; then
+#    echo "    Copying in extra notebooks for user $user..." >>$global_logfile
+#    git clone https://github.com/fperez/nipy-notebooks.git /tmp/${user}_nipy-notebooks
+#    cp /tmp/${user}_nipy-notebooks/*.ipynb ${NBDIR}/
+#fi
+
+# Check for an existing lock file
+PORT=
+if [ -f ${IP}/lock ]; then
+    echo "    Found an existing lock file for user $user..." >>$global_logfile
+    # Check to be sure the server really is running 
+    PORT=( $(<${IP}/lock) )
+    PROC=`ps -u ${user} | grep ${IPEXEC}`
+    if [ -n "$PORT" -a -n "$PROC" ]; then
+        # TODO: is there a more specific test for an active ipython kernel? 
+        # Maybe something like pinging the port?
+        echo "    Port (${PORT}) and process (${PROC}) seem valid, checking socket..." >>$global_logfile
+    	SOCK=`netstat -nan | grep ${PORT} | grep LISTEN`
+        echo "    netstat status of ${PORT}: ${SOCK})." >>$global_logfile
+    fi
+    if [ -z "$PORT" -o -z "$PROC" -o -z "$SOCK" ]; then 
+        # seems something isn't right. Probably a stale lock file.
+        # We'll just clean up and let a new kernel get launched below.
+        echo "    Cleaning up stale lock file." >>$global_logfile
+        rm ${IP}/lock
+        PORT=
+    fi
+fi
+
+if [ -z $PORT ]; then
+    # No usable kernel running. Check for rogue kernels, and kill them.
+    echo "    Killing any existing python processes for user $user..." >>$global_logfile
+    killall -u $user $IPEXEC &>>$global_logfile
+    echo "    Launching a new kernel for user $user..." >>$global_logfile
+    # Now fire up a fresh kernel. First we have to set the desired password.
+    RANDOM=`date +%N`
+    passwd=$( echo "$RANDOM" | md5sum )
+    passwd=${passwd:2:14}
+    echo $passwd > ${IP}/pass
+    # Note: if you try to pass text back from a backgrounded process, php seems to hang. 
+    # There's probably a way around this, but I kind of like the lock-file approach.
+    export IPYTHONDIR=${IP}
+    #nohup $IPEXEC notebook --profile=nbserver &> $LOG &
+    $IPEXEC_PATH notebook --profile=nbserver &> $LOG &
+    # We need to sleep for a bit here to allow ipynb to launch and write it's port to the log.
+    sleep 1
+    PORT=`sed -En 's!.*https://.*:([0-9]+)/*!\1!p' $LOG`
+    echo $PORT > ${IP}/lock
+    echo "    New kernel for user $user running on port $PORT (status=$?, pid=$!)." >>$global_logfile
+    exit 0
+else
+    echo "    Kernel already running on port ${PORT}..." >>$global_logfile
+    # Exit status 1 means we are reconnecting to an existing kernel
+    exit 1
+fi

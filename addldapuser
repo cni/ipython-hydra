@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Add a user to the system, if they don't already exist. This script must be run as root.
+# If the user exists in Stanford LDAP, we'll user their Stanford-wide UID. Otherwise,
+# they get assigned a local UID that's outside the Stanford UID range.
+
+# Copyright 2012 by Gunnaer Schaefer (gsfr@stanford.edu)  and Bob Dougherty (bobd@stanford.edu)
+
+if [ ! $1 ]; then
+    echo "Usage: $0 SUNetID"
+    exit 999
+fi
+
+if id $1 &> /dev/null ; then
+    echo "User $1 already exists. Exiting."
+    exit 1
+else
+    ldapinfo=$(ldapsearch -x -h ldap.stanford.edu uid=$1)
+    uid_num=$(echo "$ldapinfo" | grep uidNumber); uid_num=${uid_num##*: }
+    firstname=$(echo "$ldapinfo" | grep suDisplayNameFirst); firstname=${firstname##*: }
+    lastname=$(echo "$ldapinfo" | grep suDisplayNameLast); lastname=${lastname##*: }
+    if [ -z $uid_num ]; then
+        echo "User $1 does not exist in LDAP. Assigning a local UID."
+        uid_num=$((`(echo 69999; cut -d':' -f3 /etc/passwd) | sort -n | tail -1` + 1))
+    fi
+    echo "Creating user $1 ($firstname $lastname, uid = $uid_num)..."
+    /usr/sbin/adduser --disabled-password --uid $uid_num --gecos "$firstname $lastname" $1
+    /usr/sbin/adduser $1 ipython
+fi
