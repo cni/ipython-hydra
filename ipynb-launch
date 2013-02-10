@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Configre a user's home directory (if necessary) and launch an ipythonl notebook server 
+# Configre a user's home directory (if necessary) and launch an ipythonl notebook server
 # for them (also only if necessary). This script *MUST* be run as the target user!
-# It's safe to run this script as often as you like. 
+# It's safe to run this script as often as you like.
 
 # Copyright 2012 by Bob Dougherty (bobd@stanford.edu)
 
@@ -11,7 +11,7 @@
 user=`whoami`
 global_logfile=$1
 if [ -z "$global_logfile" ]; then
-    global_logfile='/tmp/${user}_ipython_server.log'
+    global_logfile="/tmp/${user}_ipython_server.log"
 fi
 echo "ipynb_launch for user $user..." >$global_logfile
 
@@ -19,10 +19,12 @@ echo "ipynb_launch for user $user..." >$global_logfile
 # that launch, and safely "killall" when needed.
 IPEXEC="apache_ipython"
 IPEXEC_PATH="/usr/local/bin/${IPEXEC}"
-IP="/home/${user}/.ipython"
+USERDIR="/home/${user}"
+IP="${USERDIR}/.ipython"
 LOG="${IP}/log"
 CONF="${IP}/profile_nbserver/ipython_notebook_config.py"
-NBDIR="/home/${user}/ipython_notebooks"
+NBDIR="${USERDIR}/bayfmri/notebooks"
+DATDIR="/data/"
 # TODO: hard-code the paths in the conf file, since we have them here anyway.
 
 if [ ! -f ${IP}/security/ssl_${user}.pem ]; then
@@ -36,7 +38,7 @@ if [ ! -e "$CONF" ]; then
     echo "c.NotebookApp.ip = 'ipython.stanford.edu'" >> ${CONF}
     # Ensure the port is within the range of ports that we have opened up in the firewall (9000-9999).
     # From the ipython code docs, the port is selected with the following algorithm:
-    #     The first 5 ports will be sequential, and the remaining n-5 will be randomly 
+    #     The first 5 ports will be sequential, and the remaining n-5 will be randomly
     #     selected in the range [port-2*n, port+2*n]. (n=port_retires)
     # WTF were they smoking?!?! Anyway, it's fine. We can deal with it.
     echo "c.NotebookApp.port = 9500" >> ${CONF}
@@ -53,21 +55,29 @@ if [ ! -e "$CONF" ]; then
     echo "c.NotebookManager.notebook_dir = u'${NBDIR}'" >> ${CONF}
 fi
 if [ ! -e "$NBDIR" ]; then
-    echo "    Creating notebook directory for user $user..." >>$global_logfile
-    mkdir -p ${NBDIR} 2>>$global_logfile
-    echo "    Cloning psych204a notebooks for user $user..." >>$global_logfile
-    git clone https://github.com/mwaskom/Psych204A.git ${NBDIR} 2>>$global_logfile
+    echo "    Cloning notebooks for user $user..." >>$global_logfile
+    git clone https://github.com/jbpoline/bayfmri.git ${USERDIR}/bayfmri 2>>$global_logfile
 else
-    echo "    Fetching psych204a notebooks for user $user..." >>$global_logfile
-    mkdir ${NBDIR}_CACHE 2>>$global_logfile
-    mv -f ${NBDIR}/* ${NBDIR}_CACHE/ 2>>$global_logfile
+    echo "    Fetching notebooks for user $user..." >>$global_logfile
     cd ${NBDIR} 2>>$global_logfile
+    mod_files=`git diff --name-only`
+    # TODO: rename the modded files so the user can see both their mods and the new stuff.
+    if [ ! -z "$mod_files" ]; then
+        mkdir ${NBDIR}_CACHE 2>>$global_logfile
+        mv -f mod_files ${NBDIR}_CACHE/ 2>>$global_logfile
+    fi
     git pull 2>>$global_logfile
     git checkout -f 2>>$global_logfile
     cd 2>>$global_logfile
-    mv -f ${NBDIR}_CACHE/* ${NBDIR}/ 2>>$global_logfile
-    rmdir ${NBDIR}_CACHE 2>>$global_logfile
-    #git --git-dir=${NBDIR}/.git fetch
+    if [ ! -z "$mod_files" ]; then
+        mv -f ${NBDIR}_CACHE/* ${NBDIR}/ 2>>$global_logfile
+        rmdir ${NBDIR}_CACHE 2>>$global_logfile
+    fi
+fi
+if [ ! -e "${NBRDIR}/ds107/" ]; then
+    echo "    Creating data directory for user $user..." >>$global_logfile
+    cp -al /data/ds107 ${NBDIR}/ 2>>$global_logfile
+
 fi
 #if [ ! -e "$NBDIR/principles_statistics.ipynb" ]; then
 #    echo "    Copying in extra notebooks for user $user..." >>$global_logfile
@@ -79,17 +89,17 @@ fi
 PORT=
 if [ -f ${IP}/lock ]; then
     echo "    Found an existing lock file for user $user..." >>$global_logfile
-    # Check to be sure the server really is running 
+    # Check to be sure the server really is running
     PORT=( $(<${IP}/lock) )
     PROC=`ps -u ${user} | grep ${IPEXEC}`
     if [ -n "$PORT" -a -n "$PROC" ]; then
-        # TODO: is there a more specific test for an active ipython kernel? 
+        # TODO: is there a more specific test for an active ipython kernel?
         # Maybe something like pinging the port?
         echo "    Port (${PORT}) and process (${PROC}) seem valid, checking socket..." >>$global_logfile
     	SOCK=`netstat -nan | grep ${PORT} | grep LISTEN`
         echo "    netstat status of ${PORT}: ${SOCK})." >>$global_logfile
     fi
-    if [ -z "$PORT" -o -z "$PROC" -o -z "$SOCK" ]; then 
+    if [ -z "$PORT" -o -z "$PROC" -o -z "$SOCK" ]; then
         # seems something isn't right. Probably a stale lock file.
         # We'll just clean up and let a new kernel get launched below.
         echo "    Cleaning up stale lock file." >>$global_logfile
@@ -108,7 +118,7 @@ if [ -z $PORT ]; then
     passwd=$( echo "$RANDOM" | md5sum )
     passwd=${passwd:2:14}
     echo $passwd > ${IP}/pass
-    # Note: if you try to pass text back from a backgrounded process, php seems to hang. 
+    # Note: if you try to pass text back from a backgrounded process, php seems to hang.
     # There's probably a way around this, but I kind of like the lock-file approach.
     export IPYTHONDIR=${IP}
     #nohup $IPEXEC notebook --profile=nbserver &> $LOG &
