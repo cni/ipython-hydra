@@ -59,24 +59,24 @@ if [ ! -e "$NBDIR" ]; then
     git clone https://github.com/jbpoline/bayfmri.git ${USERDIR}/bayfmri 2>>$global_logfile
 else
     echo "    Fetching notebooks for user $user..." >>$global_logfile
-    cd ${NBDIR} 2>>$global_logfile
+    cd ${NBDIR}/.. 2>>$global_logfile
     mod_files=`git diff --name-only`
     # TODO: rename the modded files so the user can see both their mods and the new stuff.
     if [ ! -z "$mod_files" ]; then
         mkdir ${NBDIR}_CACHE 2>>$global_logfile
-        mv -f mod_files ${NBDIR}_CACHE/ 2>>$global_logfile
+        mv -f $mod_files ${NBDIR}_CACHE/ 2>>$global_logfile
     fi
     git pull 2>>$global_logfile
-    git checkout -f 2>>$global_logfile
+    git checkout 2>>$global_logfile
     cd 2>>$global_logfile
     if [ ! -z "$mod_files" ]; then
         mv -f ${NBDIR}_CACHE/* ${NBDIR}/ 2>>$global_logfile
         rmdir ${NBDIR}_CACHE 2>>$global_logfile
     fi
 fi
-if [ ! -e "${NBRDIR}/ds107/" ]; then
+if [ ! -e "${NBDIR}/ds107/" ]; then
     echo "    Creating data directory for user $user..." >>$global_logfile
-    cp -al /data/ds107 ${NBDIR}/ 2>>$global_logfile
+    cp -as /data/ds107 ${NBDIR}/ 2>>$global_logfile
 
 fi
 #if [ ! -e "$NBDIR/principles_statistics.ipynb" ]; then
