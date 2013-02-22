@@ -1,7 +1,7 @@
 ipython-hydra
 =============
 
-Set of scripts to automatically launch iptyhon notebooks for each user who hits the page.
+Set of scripts to automatically launch ipython notebooks for each user who hits the page.
 
 To set up ipython.stanford.edu, we did a standard linux-apache web server install and installed the latest ipython (with easy install). We also installed some other python packages that we wanted, like the nipy suite.
 
@@ -15,7 +15,7 @@ Additional configuration:
     chown www-data.ipython /var/log/ipython
     chmod g+w /var/log/ipython
 
-The php scipt calls the two bash scripts, where all the hard work happens:
+The php script calls the two bash scripts, where all the hard work happens:
  * addldapuser will add a new user to the system, if they don't already exist. It must be run as root. The password is disabled because we use Stanford's kerberos authentication, so if users log in via ssh they can authenticate with their SUNet ID and password. The new user is also added to the ipython group. If the user exists in Stanford LDAP, then their UID will be assigned by the LDAP result. Otherwise, a local UID is used. 
  
  * ipynb-launch will configure a new user's home directory (if it hasn't already been done) by setting up the ipython config file and checking out the tutorial notebooks from github. If the notebooks already exist, git pull is run to get any new items. However, we ensure that any existing notebooks are kept as the user last left them to ensure that we don't corrupt any of their edits. (NOTE: this part of the code suck particularly badly! Please tell me how to do this elegantly with git!) Finally, a new ipython notebook is launched, if needed. The port that it listens on and the auto-generated password are stored in files within the user's home directory (in ~/.ipython/lock and ~/.ipython/pass). If a server is already running for that user, and it seems to be listening on the correct port, then no action is taken.
