@@ -11,6 +11,7 @@ Additional configuration:
     addgroup --system ipython
     echo “www-data ALL=(%ipython) NOPASSWD: /usr/local/bin/ipynb-launch” >> /etc/sudoers.d/ipython
     echo “www-data ALL=(root) NOPASSWD: /usr/local/bin/addldapuser” >> /etc/sudoers.d/ipython
+    chmod 0440 /etc/sudoers.d/ipython
     mkdir /var/log/ipython
     chown www-data.ipython /var/log/ipython
     chmod g+w /var/log/ipython
@@ -22,5 +23,5 @@ The php script calls the two bash scripts, where all the hard work happens:
 
 After these scripts are called, the port and password are read from the user's home directory and a little intermediate page is returned to the client. This page just contains a little javascript to do a POST to the ipython notebook server login page with the auto-generated password. If all works as planned, the user will never see this hidden page nor the ipython login page. They should be taken directly to their active notebook server. Unfortunately, sometimes we've noticed that the auto-login fails, and the user is confronted with the ipython log in page requesting a password that they don't know. Reloading the ipython.stanford.edu page to let it redo the auto-login usually fixes it. (The user will also see the ipython login page if they click the logout button in the notebook. Is there any way to hack around this?)
 
-
+To run the latest (development)branch of iptyhon, get it from github and then run "sudo pip install -e ." from the ipython directory. This installs the necessary packages and symlinks IPython into your system (in /usr/local/...) so that you can run the latest code.
 
